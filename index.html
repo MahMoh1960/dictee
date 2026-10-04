@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Dictée vocale FR / AR / EN</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1d4ed8">
+<link rel="icon" href="icon-192.png">
 <style>
 :root{--bg:#f6f5f1;--card:#fff;--tx:#1f2328;--mut:#6b7280;--ac:#1d4ed8;--rec:#dc2626;--bd:#e2e0d8;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15171a;--card:#1e2126;--tx:#e7e9ec;--mut:#9aa1ab;--ac:#6ea0ff;--bd:#2d3239}}
@@ -411,6 +414,7 @@ $('share').onclick=async()=>{
   try{await navigator.clipboard.writeText(location.href);info('Lien copié ✓')}
   catch(_){if(navigator.share){try{await navigator.share({title:document.title,url:location.href})}catch(_){}}else prompt('Copiez le lien :',location.href)}
 };
+try{if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js')}catch(_){}
 lang.value=opts.lang;if(lang.value!==opts.lang)lang.value='fr-FR';
 txt.style.fontSize=opts.size+'rem';applyTheme();renderHist();stats();fillVoices();
 </script>
