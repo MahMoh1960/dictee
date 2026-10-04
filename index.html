@@ -56,6 +56,7 @@ ul{padding:0;margin:6px 0}
     <option value="en-US">English (US)</option>
     <option value="en-GB">English (UK)</option>
   </select>
+  <div class="row" style="margin-top:10px"><select id="voice" aria-label="Voix de lecture"></select><label style="font-size:.86rem;display:flex;align-items:center;gap:6px">Vitesse <input type="range" id="rate" min="0.6" max="1.4" step="0.05" style="width:110px"></label></div>
   <div class="row opts" style="margin-top:10px">
     <label><input type="checkbox" id="o-cmds"> Commandes vocales</label>
     <label><input type="checkbox" id="o-punct"> Ponctuation vocale</label>
@@ -114,7 +115,7 @@ const $=id=>document.getElementById(id);
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 const txt=$('txt'),mic=$('mic'),itm=$('interim'),msg=$('msg'),lang=$('lang');
 const store={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(_){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(_){}}};
-const opts=Object.assign({lang:'fr-FR',punct:true,caps:true,cmds:true,auto:false,rec:false,size:1.1,theme:'auto'},store.get('opts',{}));
+const opts=Object.assign({lang:'fr-FR',punct:true,caps:true,cmds:true,auto:false,rec:false,voices:{},rate:1,size:1.1,theme:'auto'},store.get('opts',{}));
 const sv=()=>store.set('opts',opts);
 let rec=null,listening=false,undo=[''],redo=[],timer=null,wake=null;
 
@@ -238,7 +239,7 @@ async function makeMp3(){
   busy=true;
   try{
     const en=lang.value.startsWith('en');
-    const parts=text.split(/(?<=[.!?…؟\n])\s+/).map(x=>x.trim()).filter(Boolean).flatMap(x=>x.match(/.{1,250}(?:\s|$)/gu)||[x]);
+    const parts=text.split(/(?<=[.!?…؟\n])\s+/).map(x=>x.trim()).filter(Boolean).flatMap(x=>x.match(/[\u0600-\u06FF]/.test(x)?/.{1,140}(?:\s|$)/gu:/.{1,250}(?:\s|$)/gu)||[x]);
     const bits=[];let sr=16000,len=0;
     for(let i=0;i<parts.length;i++){
       const k=/[\u0600-\u06FF]/.test(parts[i])?'ar':(en?'en':'fr');
@@ -291,7 +292,15 @@ async function toMp3(parts,ms,m){
   }catch(e){info('Conversion MP3 impossible : '+e.message,1)}
 }
 let voices=[];
-function loadVoices(){try{voices=speechSynthesis.getVoices()}catch(_){}}
+function pick(g){const id=opts.voices&&opts.voices[g];return id&&voices.find(x=>(x.voiceURI||x.name)===id)}
+function fillVoices(){
+  const sel=$('voice'),g=lang.value.slice(0,2),cur=(opts.voices&&opts.voices[g])||'';
+  sel.innerHTML='';
+  const o0=document.createElement('option');o0.value='';o0.textContent='Voix automatique';sel.append(o0);
+  voices.filter(v=>v.lang.replace('_','-').toLowerCase().startsWith(g)).forEach(v=>{const o=document.createElement('option');o.value=v.voiceURI||v.name;o.textContent=v.name+' ('+v.lang+')';sel.append(o)});
+  sel.value=cur;if(sel.value!==cur)sel.value='';
+}
+function loadVoices(){try{voices=speechSynthesis.getVoices()}catch(_){}fillVoices()}
 if('speechSynthesis' in window){loadVoices();speechSynthesis.onvoiceschanged=loadVoices}
 async function doRead(){
   if(!('speechSynthesis' in window)){info('Lecture vocale non disponible',1);return}
@@ -305,12 +314,13 @@ async function doRead(){
   const frV=voices.find(v=>/^fr[-_]fr/i.test(v.lang))||voices.find(v=>/^fr/i.test(v.lang));
   let missing=false;
   parts.forEach((p,i)=>{
-    const ar=/[\u0600-\u06FF]/.test(p),u=new SpeechSynthesisUtterance(p),v=ar?arV:(en?enV:frV);
-    if(v){u.voice=v;u.lang=v.lang}else{u.lang=ar?'ar-SA':(en?lang.value:'fr-FR');if(ar&&voices.length)missing=true}
-    if(i===parts.length-1)u.onend=u.onerror=()=>{if(id===readId)recStop()};
+    const ar=/[\u0600-\u06FF]/.test(p),u=new SpeechSynthesisUtterance(p),v=pick(ar?'ar':(en?'en':'fr'))||(ar?arV:(en?enV:frV));
+    if(v){u.voice=v;u.lang=v.lang}else{u.lang=ar?'ar-SA':(en?lang.value:'fr-FR')}
+    u.rate=opts.rate||1;
+    u.onerror=e=>{if(['language-unavailable','synthesis-unavailable','voice-unavailable'].includes(e.error))info('Voix indisponible pour cette langue : installez-la dans Réglages > Synthèse vocale > moteur Google',1);if(i===parts.length-1&&id===readId)recStop()};
+    if(i===parts.length-1)u.onend=()=>{if(id===readId)recStop()};
     speechSynthesis.speak(u);
   });
-  if(missing)info("Aucune voix arabe installée : Réglages > Gestion globale > Langue > Synthèse vocale > moteur Google > installer l'arabe.",1);
 }
 function hist(){return store.get('hist',[])}
 function doSave(){
@@ -328,7 +338,7 @@ function renderHist(){
     li.append(s,o,d);ul.append(li);
   });
 }
-function setLang(c){lang.value=c;opts.lang=c;sv();info('Langue changée');if(listening)restart()}
+function setLang(c){lang.value=c;opts.lang=c;sv();fillVoices();info('Langue changée');if(listening)restart()}
 const loc=()=>lang.value.startsWith('ar')?'ar-MA':lang.value.startsWith('en')?lang.value:'fr-FR';
 const A={
 clear:()=>{set('');info('Texte effacé (dites « annule » pour le récupérer)')},
@@ -374,7 +384,9 @@ function stop(){
 function restart(){if(rec){rec.onend=null;try{rec.abort()}catch(_){}}setTimeout(start,250)}
 if(!SR){mic.disabled=true;info("La reconnaissance vocale n'est pas disponible ici. Utilisez Google Chrome (Android ou ordinateur) ou Safari récent.",1)}
 mic.onclick=()=>listening?stop():start();
-lang.onchange=()=>{opts.lang=lang.value;sv();if(listening)restart()};
+lang.onchange=()=>{opts.lang=lang.value;sv();fillVoices();if(listening)restart()};
+$('voice').onchange=e=>{const g=lang.value.slice(0,2);opts.voices=opts.voices||{};opts.voices[g]=e.target.value;sv()};
+$('rate').value=opts.rate||1;$('rate').oninput=e=>{opts.rate=+e.target.value;sv()};
 
 /* boutons et réglages */
 $('bUndo').onclick=doUndo;$('bRedo').onclick=doRedo;$('bCopy').onclick=doCopy;$('bDl').onclick=doDl;
@@ -398,7 +410,7 @@ $('share').onclick=async()=>{
   catch(_){if(navigator.share){try{await navigator.share({title:document.title,url:location.href})}catch(_){}}else prompt('Copiez le lien :',location.href)}
 };
 lang.value=opts.lang;if(lang.value!==opts.lang)lang.value='fr-FR';
-txt.style.fontSize=opts.size+'rem';applyTheme();renderHist();stats();
+txt.style.fontSize=opts.size+'rem';applyTheme();renderHist();stats();fillVoices();
 </script>
 </body>
 </html>
