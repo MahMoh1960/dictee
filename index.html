@@ -216,10 +216,12 @@ async function doCopy(){try{await navigator.clipboard.writeText(txt.value);info(
 function doDl(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(["\ufeff"+txt.value],{type:'text/plain;charset=utf-8'}));a.download='dictee.txt';a.click()}
 async function doShare(){if(navigator.share){try{await navigator.share({text:txt.value})}catch(_){}}else doCopy()}
 /* synthèse vocale intégrée (modèles MMS exécutés dans le navigateur) → MP3 */
+const tick=()=>new Promise(r=>setTimeout(r,0));
 const TTSM={ar:'Xenova/mms-tts-ara',fr:'Xenova/mms-tts-fra',en:'Xenova/mms-tts-eng'},ttsP={};let tfm=null,busy=false;
 async function getTts(k){
   if(ttsP[k])return ttsP[k];
-  if(!tfm){tfm=await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');tfm.env.allowLocalModels=false}
+  for(const o of Object.keys(ttsP)){try{await ttsP[o].dispose()}catch(_){}delete ttsP[o]}
+  if(!tfm){tfm=await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');tfm.env.allowLocalModels=false;tfm.env.backends.onnx.wasm.proxy=true;tfm.env.backends.onnx.wasm.numThreads=1}
   return ttsP[k]=await tfm.pipeline('text-to-speech',TTSM[k],{progress_callback:p=>{if(p.status==='progress')info('Téléchargement de la voix '+k.toUpperCase()+' : '+Math.round(p.progress)+' %')}});
 }
 async function makeMp3(){
@@ -227,6 +229,10 @@ async function makeMp3(){
   const text=txt.value.trim();
   if(!text){info('Aucun texte à convertir',1);return}
   if(typeof lamejs==='undefined'){info("Convertisseur MP3 non chargé : vérifiez la connexion internet",1);return}
+  if(text.length>3000){info('Texte trop long pour le téléphone : créez le MP3 par parties de 3000 caractères maximum',1);return}
+  try{speechSynthesis.cancel()}catch(_){}
+  readId++;
+  if(mrec&&mrec.state!=='inactive'){mrec.skip=true;try{mrec.stop()}catch(_){}}
   busy=true;
   try{
     const en=lang.value.startsWith('en');
@@ -235,14 +241,14 @@ async function makeMp3(){
     for(let i=0;i<parts.length;i++){
       const k=/[\u0600-\u06FF]/.test(parts[i])?'ar':(en?'en':'fr');
       info('Voix '+k.toUpperCase()+' : phrase '+(i+1)+' / '+parts.length+'…');
-      const t=await getTts(k),o=await t(parts[i].trim());
+      await tick();const t=await getTts(k),o=await t(parts[i].trim());
       sr=o.sampling_rate;bits.push(o.audio,new Float32Array(Math.round(sr*.25)));len+=o.audio.length+Math.round(sr*.25);
     }
     const all=new Float32Array(len);let off=0;bits.forEach(b=>{all.set(b,off);off+=b.length});
     const pcm=new Int16Array(all.length);
     for(let i=0;i<all.length;i++){const x=Math.max(-1,Math.min(1,all[i]));pcm[i]=x<0?x*32768:x*32767}
     const enc=new lamejs.Mp3Encoder(1,sr,64),out=[];
-    for(let i=0;i<pcm.length;i+=1152){const b=enc.encodeBuffer(pcm.subarray(i,i+1152));if(b.length)out.push(b)}
+    for(let i=0;i<pcm.length;i+=1152){const b=enc.encodeBuffer(pcm.subarray(i,i+1152));if(b.length)out.push(b);if((i/1152)%80===0)await tick()}
     const e=enc.flush();if(e.length)out.push(e);
     const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(out,{type:'audio/mpeg'}));
     a.download='texte-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.mp3';a.click();
@@ -257,16 +263,16 @@ async function recStart(){
   try{
     if(mrec&&mrec.state!=='inactive')mrec.stop();
     const ms=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
-    const my=[];mstream=ms;mrec=new MediaRecorder(ms);
+    const my=[];mstream=ms;const r=new MediaRecorder(ms);mrec=r;
     mrec.ondataavailable=e=>{if(e.data.size)my.push(e.data)};
-    mrec.onstop=()=>toMp3(my,ms);
+    r.onstop=()=>toMp3(my,ms,r);
     mrec.start();info('Enregistrement MP3 en cours…');
   }catch(e){mrec=null;info("Enregistrement impossible : micro non disponible",1)}
 }
 function recStop(){const m=mrec;if(m&&m.state!=='inactive')setTimeout(()=>{try{m.stop()}catch(_){}},700)}
-async function toMp3(parts,ms){
+async function toMp3(parts,ms,m){
   ms.getTracks().forEach(t=>t.stop());
-  if(!parts.length)return;
+  if(!parts.length||(m&&m.skip))return;
   try{
     info('Conversion en MP3…');
     const buf=await new Blob(parts).arrayBuffer();
@@ -275,7 +281,7 @@ async function toMp3(parts,ms){
     const ch=ab.getChannelData(0),sr=ab.sampleRate,pcm=new Int16Array(ch.length);
     for(let i=0;i<ch.length;i++){const x=Math.max(-1,Math.min(1,ch[i]));pcm[i]=x<0?x*32768:x*32767}
     const enc=new lamejs.Mp3Encoder(1,sr,96),out=[];
-    for(let i=0;i<pcm.length;i+=1152){const b=enc.encodeBuffer(pcm.subarray(i,i+1152));if(b.length)out.push(b)}
+    for(let i=0;i<pcm.length;i+=1152){const b=enc.encodeBuffer(pcm.subarray(i,i+1152));if(b.length)out.push(b);if((i/1152)%80===0)await tick()}
     const e=enc.flush();if(e.length)out.push(e);
     const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(out,{type:'audio/mpeg'}));
     a.download='lecture-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.mp3';a.click();
