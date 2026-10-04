@@ -243,7 +243,7 @@ async function makeMp3(){
     for(let i=0;i<parts.length;i++){
       const k=/[\u0600-\u06FF]/.test(parts[i])?'ar':(en?'en':'fr');
       info('Voix '+k.toUpperCase()+' : phrase '+(i+1)+' / '+parts.length+'…');
-      await tick();const t=await getTts(k),o=await t(parts[i].trim());
+      await tick();const t=await getTts(k),o=await t(k==='ar'?parts[i].replace(/[\u0640\u064B-\u065F\u0670]/g,'').trim():parts[i].trim());
       sr=o.sampling_rate;bits.push(o.audio,new Float32Array(Math.round(sr*.25)));len+=o.audio.length+Math.round(sr*.25);
     }
     const all=new Float32Array(len);let off=0;bits.forEach(b=>{all.set(b,off);off+=b.length});
