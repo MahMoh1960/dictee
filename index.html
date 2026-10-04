@@ -257,7 +257,7 @@ async function makeMp3(){
     const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(out,{type:'audio/mpeg'}));
     a.download='texte-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.mp3';a.click();
     info('Fichier MP3 créé ✓');
-  }catch(e){info('Échec de la synthèse MP3 : '+e.message,1)}
+  }catch(e){info('Échec de la synthèse MP3 : '+e.message+' [page : '+location.hostname+']',1)}
   busy=false;
 }
 let recOnce=false,readId=0,mrec=null,mstream=null;
@@ -272,7 +272,7 @@ async function recStart(){
     mrec.ondataavailable=e=>{if(e.data.size)my.push(e.data)};
     r.onstop=()=>toMp3(my,ms,r);
     mrec.start();info('Enregistrement en cours : restez au calme jusqu\'à la fin de la lecture…');
-  }catch(e){mrec=null;info("Enregistrement impossible : micro non disponible",1)}
+  }catch(e){mrec=null;info('Enregistrement impossible ('+(e.name||'erreur')+') sur '+location.hostname+(e.name==='NotAllowedError'?' : autorisez le micro pour ce site (cadenas > Autorisations).':e.name==='NotReadableError'?' : micro utilisé par une autre application.':''),1)}
 }
 function recStop(){const m=mrec;if(m&&m.state!=='inactive')setTimeout(()=>{try{m.stop()}catch(_){}},700)}
 async function toMp3(parts,ms,m){
