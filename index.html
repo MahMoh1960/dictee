@@ -76,6 +76,7 @@ ul{padding:0;margin:6px 0}
     <button id="bDl">.txt</button>
     <button id="bShare">Partager</button>
     <button id="bRead">🔊 Lire</button>
+    <button id="bMp3G">🎙️ MP3 (voix Google)</button>
     <button id="bMp3">🎧 MP3 (voix intégrée)</button>
     <button id="bSave">💾 Enregistrer</button>
     <button id="bMin">A−</button>
@@ -259,9 +260,10 @@ async function makeMp3(){
   }catch(e){info('Échec de la synthèse MP3 : '+e.message,1)}
   busy=false;
 }
-let readId=0,mrec=null,mstream=null;
+let recOnce=false,readId=0,mrec=null,mstream=null;
 async function recStart(){
-  if(!opts.rec||!navigator.mediaDevices||!window.MediaRecorder)return;
+  const want=opts.rec||recOnce;recOnce=false;
+  if(!want||!navigator.mediaDevices||!window.MediaRecorder)return;
   if(listening)stop();
   try{
     if(mrec&&mrec.state!=='inactive')mrec.stop();
@@ -269,7 +271,7 @@ async function recStart(){
     const my=[];mstream=ms;const r=new MediaRecorder(ms);mrec=r;
     mrec.ondataavailable=e=>{if(e.data.size)my.push(e.data)};
     r.onstop=()=>toMp3(my,ms,r);
-    mrec.start();info('Enregistrement MP3 en cours…');
+    mrec.start();info('Enregistrement en cours : restez au calme jusqu\'à la fin de la lecture…');
   }catch(e){mrec=null;info("Enregistrement impossible : micro non disponible",1)}
 }
 function recStop(){const m=mrec;if(m&&m.state!=='inactive')setTimeout(()=>{try{m.stop()}catch(_){}},700)}
@@ -390,7 +392,7 @@ $('rate').value=opts.rate||1;$('rate').oninput=e=>{opts.rate=+e.target.value;sv(
 
 /* boutons et réglages */
 $('bUndo').onclick=doUndo;$('bRedo').onclick=doRedo;$('bCopy').onclick=doCopy;$('bDl').onclick=doDl;
-$('bShare').onclick=doShare;$('bRead').onclick=doRead;$('bMp3').onclick=makeMp3;$('bSave').onclick=doSave;$('bClr').onclick=A.clear;
+$('bShare').onclick=doShare;$('bRead').onclick=doRead;$('bMp3').onclick=makeMp3;$('bMp3G').onclick=()=>{recOnce=true;doRead()};$('bSave').onclick=doSave;$('bClr').onclick=A.clear;
 function size(d){opts.size=Math.min(2,Math.max(.8,+(opts.size+d).toFixed(2)));txt.style.fontSize=opts.size+'rem';sv()}
 $('bMin').onclick=()=>size(-.1);$('bMax').onclick=()=>size(.1);
 $('bRep').onclick=()=>{
