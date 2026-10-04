@@ -217,6 +217,8 @@ function doDl(){const a=document.createElement('a');a.href=URL.createObjectURL(n
 async function doShare(){if(navigator.share){try{await navigator.share({text:txt.value})}catch(_){}}else doCopy()}
 /* synthèse vocale intégrée (modèles MMS exécutés dans le navigateur) → MP3 */
 const tick=()=>new Promise(r=>setTimeout(r,0));
+const _fetch=window.fetch.bind(window);
+window.fetch=async(...x)=>{try{return await _fetch(...x)}catch(e){const u=typeof x[0]==='string'?x[0]:(x[0]&&x[0].url)||'';e.message+=' → '+u.replace(/^https?:\/\//,'').slice(0,70);throw e}};
 const TTSM={ar:'Xenova/mms-tts-ara',fr:'Xenova/mms-tts-fra',en:'Xenova/mms-tts-eng'},ttsP={};let tfm=null,busy=false;
 async function getTts(k){
   if(ttsP[k])return ttsP[k];
