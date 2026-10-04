@@ -61,6 +61,7 @@ ul{padding:0;margin:6px 0}
     <label><input type="checkbox" id="o-punct"> Ponctuation vocale</label>
     <label><input type="checkbox" id="o-caps"> Majuscules auto</label>
     <label><input type="checkbox" id="o-auto"> Copier à l'arrêt</label>
+    <label><input type="checkbox" id="o-rec"> MP3 de la lecture (via le micro)</label>
   </div>
   <button id="mic">🎤 Démarrer la dictée</button>
   <textarea id="txt" dir="auto" placeholder="Le texte dicté apparaîtra ici…"></textarea>
@@ -74,6 +75,7 @@ ul{padding:0;margin:6px 0}
     <button id="bDl">.txt</button>
     <button id="bShare">Partager</button>
     <button id="bRead">🔊 Lire</button>
+    <button id="bMp3">🎧 MP3 (voix intégrée)</button>
     <button id="bSave">💾 Enregistrer</button>
     <button id="bMin">A−</button>
     <button id="bMax">A+</button>
@@ -98,7 +100,7 @@ ul{padding:0;margin:6px 0}
     <summary>Commandes vocales</summary>
     <div class="help">
       <p><b>Ponctuation :</b> point · virgule · point d'interrogation · point d'exclamation · point-virgule · deux points · points de suspension · ouvrez / fermez la parenthèse · ouvrez / fermez les guillemets · tiret · apostrophe · arobase · slash · pour cent · à la ligne · nouveau paragraphe</p>
-      <p><b>Actions</b> (à dire seules) : efface tout · efface le dernier mot · efface la dernière phrase · annule · rétablis · copie le texte · télécharge le texte · partage le texte · lis le texte · arrête la lecture · enregistre le texte · nouveau document · insère la date · insère l'heure · passe en arabe · passe en français · passe en anglais · arrête la dictée</p>
+      <p><b>Actions</b> (à dire seules) : efface tout · efface le dernier mot · efface la dernière phrase · annule · rétablis · copie le texte · télécharge le texte · partage le texte · lis le texte · arrête la lecture · enregistre le texte · nouveau document · insère la date · insère l'heure · passe en arabe · passe en français · passe en anglais · crée le mp3 · arrête la dictée</p>
       <p><b>English:</b> comma · period · question mark · exclamation mark · colon · semicolon · open / close parenthesis · open / close quote · new line · new paragraph · hyphen · <i>(actions)</i> clear all · undo · redo · delete last word · delete last sentence · copy the text · download the text · share the text · read the text · stop reading · save the text · new document · insert date · insert time · switch to french · switch to arabic · stop dictation</p>
       <p dir="rtl"><b>بالعربية:</b> نقطة · فاصلة · علامة استفهام · علامة تعجب · نقطتان · فاصلة منقوطة · سطر جديد · فقرة جديدة · افتح قوس · أغلق قوس · افتح اقتباس · أغلق اقتباس<br>
       <b>أوامر:</b> امسح كل شيء · امسح الكلمة الأخيرة · امسح الجملة الأخيرة · تراجع · أعد · انسخ النص · حمّل النص · شارك النص · اقرأ النص · أوقف القراءة · احفظ النص · نص جديد · ادرج التاريخ · ادرج الوقت · حوّل إلى الفرنسية · أوقف الإملاء</p>
@@ -106,12 +108,13 @@ ul{padding:0;margin:6px 0}
   </details>
 </div>
 </main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.min.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 const txt=$('txt'),mic=$('mic'),itm=$('interim'),msg=$('msg'),lang=$('lang');
 const store={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(_){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(_){}}};
-const opts=Object.assign({lang:'fr-FR',punct:true,caps:true,cmds:true,auto:false,size:1.1,theme:'auto'},store.get('opts',{}));
+const opts=Object.assign({lang:'fr-FR',punct:true,caps:true,cmds:true,auto:false,rec:false,size:1.1,theme:'auto'},store.get('opts',{}));
 const sv=()=>store.set('opts',opts);
 let rec=null,listening=false,undo=[''],redo=[],timer=null,wake=null;
 
@@ -141,6 +144,7 @@ share:['share text','share the text','partage le texte','partager le texte','ش�
 fr:['switch to french','in french','passe en français','passe en français','en français','mode français','حول إلى الفرنسية','بالفرنسية'],
 ar:['switch to arabic','in arabic','passe en arabe','en arabe','mode arabe','حول إلى العربية','بالعربية'],
 date:['insert date','insert the date','insère la date','insère date','ادرج التاريخ'],
+mp3:['crée le mp3','créer le mp3','crée un mp3','export mp3','exporte en mp3','create mp3','create the mp3'],
 en:['switch to english','in english','english mode','passe en anglais','en anglais','mode anglais','حول إلى الإنجليزية','بالإنجليزية'],
 time:['insert time','insert the time',"insère l'heure",'insère heure','ادرج الوقت']
 };
@@ -211,22 +215,91 @@ function onFinal(t){
 async function doCopy(){try{await navigator.clipboard.writeText(txt.value);info('Texte copié ✓')}catch(_){txt.select();document.execCommand('copy');info('Texte copié ✓')}}
 function doDl(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(["\ufeff"+txt.value],{type:'text/plain;charset=utf-8'}));a.download='dictee.txt';a.click()}
 async function doShare(){if(navigator.share){try{await navigator.share({text:txt.value})}catch(_){}}else doCopy()}
+/* synthèse vocale intégrée (modèles MMS exécutés dans le navigateur) → MP3 */
+const TTSM={ar:'Xenova/mms-tts-ara',fr:'Xenova/mms-tts-fra',en:'Xenova/mms-tts-eng'},ttsP={};let tfm=null,busy=false;
+async function getTts(k){
+  if(ttsP[k])return ttsP[k];
+  if(!tfm){tfm=await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');tfm.env.allowLocalModels=false}
+  return ttsP[k]=await tfm.pipeline('text-to-speech',TTSM[k],{progress_callback:p=>{if(p.status==='progress')info('Téléchargement de la voix '+k.toUpperCase()+' : '+Math.round(p.progress)+' %')}});
+}
+async function makeMp3(){
+  if(busy){info('Conversion déjà en cours…');return}
+  const text=txt.value.trim();
+  if(!text){info('Aucun texte à convertir',1);return}
+  if(typeof lamejs==='undefined'){info("Convertisseur MP3 non chargé : vérifiez la connexion internet",1);return}
+  busy=true;
+  try{
+    const en=lang.value.startsWith('en');
+    const parts=text.split(/(?<=[.!?…؟\n])\s+/).map(x=>x.trim()).filter(Boolean).flatMap(x=>x.match(/.{1,250}(?:\s|$)/gu)||[x]);
+    const bits=[];let sr=16000,len=0;
+    for(let i=0;i<parts.length;i++){
+      const k=/[\u0600-\u06FF]/.test(parts[i])?'ar':(en?'en':'fr');
+      info('Voix '+k.toUpperCase()+' : phrase '+(i+1)+' / '+parts.length+'…');
+      const t=await getTts(k),o=await t(parts[i].trim());
+      sr=o.sampling_rate;bits.push(o.audio,new Float32Array(Math.round(sr*.25)));len+=o.audio.length+Math.round(sr*.25);
+    }
+    const all=new Float32Array(len);let off=0;bits.forEach(b=>{all.set(b,off);off+=b.length});
+    const pcm=new Int16Array(all.length);
+    for(let i=0;i<all.length;i++){const x=Math.max(-1,Math.min(1,all[i]));pcm[i]=x<0?x*32768:x*32767}
+    const enc=new lamejs.Mp3Encoder(1,sr,64),out=[];
+    for(let i=0;i<pcm.length;i+=1152){const b=enc.encodeBuffer(pcm.subarray(i,i+1152));if(b.length)out.push(b)}
+    const e=enc.flush();if(e.length)out.push(e);
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(out,{type:'audio/mpeg'}));
+    a.download='texte-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.mp3';a.click();
+    info('Fichier MP3 créé ✓');
+  }catch(e){info('Échec de la synthèse MP3 : '+e.message,1)}
+  busy=false;
+}
+let readId=0,mrec=null,mstream=null;
+async function recStart(){
+  if(!opts.rec||!navigator.mediaDevices||!window.MediaRecorder)return;
+  if(listening)stop();
+  try{
+    if(mrec&&mrec.state!=='inactive')mrec.stop();
+    const ms=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+    const my=[];mstream=ms;mrec=new MediaRecorder(ms);
+    mrec.ondataavailable=e=>{if(e.data.size)my.push(e.data)};
+    mrec.onstop=()=>toMp3(my,ms);
+    mrec.start();info('Enregistrement MP3 en cours…');
+  }catch(e){mrec=null;info("Enregistrement impossible : micro non disponible",1)}
+}
+function recStop(){const m=mrec;if(m&&m.state!=='inactive')setTimeout(()=>{try{m.stop()}catch(_){}},700)}
+async function toMp3(parts,ms){
+  ms.getTracks().forEach(t=>t.stop());
+  if(!parts.length)return;
+  try{
+    info('Conversion en MP3…');
+    const buf=await new Blob(parts).arrayBuffer();
+    const ac=new(window.AudioContext||window.webkitAudioContext)();
+    const ab=await ac.decodeAudioData(buf);ac.close();
+    const ch=ab.getChannelData(0),sr=ab.sampleRate,pcm=new Int16Array(ch.length);
+    for(let i=0;i<ch.length;i++){const x=Math.max(-1,Math.min(1,ch[i]));pcm[i]=x<0?x*32768:x*32767}
+    const enc=new lamejs.Mp3Encoder(1,sr,96),out=[];
+    for(let i=0;i<pcm.length;i+=1152){const b=enc.encodeBuffer(pcm.subarray(i,i+1152));if(b.length)out.push(b)}
+    const e=enc.flush();if(e.length)out.push(e);
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(out,{type:'audio/mpeg'}));
+    a.download='lecture-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.mp3';a.click();
+    info('Fichier MP3 enregistré ✓');
+  }catch(e){info('Conversion MP3 impossible : '+e.message,1)}
+}
 let voices=[];
 function loadVoices(){try{voices=speechSynthesis.getVoices()}catch(_){}}
 if('speechSynthesis' in window){loadVoices();speechSynthesis.onvoiceschanged=loadVoices}
-function doRead(){
+async function doRead(){
   if(!('speechSynthesis' in window)){info('Lecture vocale non disponible',1);return}
-  speechSynthesis.cancel();loadVoices();
+  speechSynthesis.cancel();loadVoices();const id=++readId;
   const parts=txt.value.split(/(?<=[.!?…؟\n])\s+/).map(x=>x.trim()).filter(Boolean);
   if(!parts.length){info('Aucun texte à lire');return}
+  await recStart();
   const arV=voices.find(v=>/^ar[-_]sa/i.test(v.lang))||voices.find(v=>/^ar/i.test(v.lang));
   const en=lang.value.startsWith('en');
   const enV=voices.find(v=>v.lang.replace('_','-').toLowerCase()===lang.value.toLowerCase())||voices.find(v=>/^en/i.test(v.lang));
   const frV=voices.find(v=>/^fr[-_]fr/i.test(v.lang))||voices.find(v=>/^fr/i.test(v.lang));
   let missing=false;
-  parts.forEach(p=>{
+  parts.forEach((p,i)=>{
     const ar=/[\u0600-\u06FF]/.test(p),u=new SpeechSynthesisUtterance(p),v=ar?arV:(en?enV:frV);
     if(v){u.voice=v;u.lang=v.lang}else{u.lang=ar?'ar-SA':(en?lang.value:'fr-FR');if(ar&&voices.length)missing=true}
+    if(i===parts.length-1)u.onend=u.onerror=()=>{if(id===readId)recStop()};
     speechSynthesis.speak(u);
   });
   if(missing)info("Aucune voix arabe installée : Réglages > Gestion globale > Langue > Synthèse vocale > moteur Google > installer l'arabe.",1);
@@ -254,9 +327,9 @@ clear:()=>{set('');info('Texte effacé (dites « annule » pour le récupérer)'
 undoC:doUndo,redoC:doRedo,
 w:()=>set(txt.value.replace(/\s*\S+\s*$/,'')),
 s:()=>set(txt.value.replace(/[^.!?…؟\n]*[.!?…؟]?\s*$/,'')),
-copy:doCopy,dl:doDl,read:doRead,mute:()=>{try{speechSynthesis.cancel()}catch(_){}},
+copy:doCopy,dl:doDl,read:doRead,mute:()=>{try{speechSynthesis.cancel()}catch(_){}readId++;recStop()},
 stop:()=>stop(),save:doSave,neu:()=>{doSave();set('')},share:doShare,
-fr:()=>setLang('fr-FR'),ar:()=>setLang('ar-MA'),en:()=>setLang('en-US'),
+fr:()=>setLang('fr-FR'),ar:()=>setLang('ar-MA'),en:()=>setLang('en-US'),mp3:()=>makeMp3(),
 date:()=>ins(new Date().toLocaleDateString(loc())),
 time:()=>ins(new Date().toLocaleTimeString(loc(),{hour:'2-digit',minute:'2-digit'}))
 };
@@ -297,7 +370,7 @@ lang.onchange=()=>{opts.lang=lang.value;sv();if(listening)restart()};
 
 /* boutons et réglages */
 $('bUndo').onclick=doUndo;$('bRedo').onclick=doRedo;$('bCopy').onclick=doCopy;$('bDl').onclick=doDl;
-$('bShare').onclick=doShare;$('bRead').onclick=doRead;$('bSave').onclick=doSave;$('bClr').onclick=A.clear;
+$('bShare').onclick=doShare;$('bRead').onclick=doRead;$('bMp3').onclick=makeMp3;$('bSave').onclick=doSave;$('bClr').onclick=A.clear;
 function size(d){opts.size=Math.min(2,Math.max(.8,+(opts.size+d).toFixed(2)));txt.style.fontSize=opts.size+'rem';sv()}
 $('bMin').onclick=()=>size(-.1);$('bMax').onclick=()=>size(.1);
 $('bRep').onclick=()=>{
@@ -306,7 +379,7 @@ $('bRep').onclick=()=>{
   const n=(txt.value.match(re)||[]).length;
   if(n){set(txt.value.replace(re,()=>$('ri').value));info(n+' remplacement(s)')}else info('Aucune occurrence trouvée');
 };
-['punct','caps','cmds','auto'].forEach(k=>{const c=$('o-'+k);c.checked=opts[k];c.onchange=()=>{opts[k]=c.checked;sv()}});
+['punct','caps','cmds','auto','rec'].forEach(k=>{const c=$('o-'+k);c.checked=opts[k];c.onchange=()=>{opts[k]=c.checked;sv()}});
 function applyTheme(){
   if(opts.theme==='auto')delete document.documentElement.dataset.theme;else document.documentElement.dataset.theme=opts.theme;
   $('theme').textContent={auto:'🌓',dark:'🌙',light:'☀️'}[opts.theme];
