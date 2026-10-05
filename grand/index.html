@@ -1,1 +1,456 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dictée vocale FR / AR / EN</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1d4ed8">
+<link rel="icon" href="../icon-192.png">
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--tx:#1f2328;--mut:#6b7280;--ac:#1d4ed8;--rec:#dc2626;--bd:#e2e0d8;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15171a;--card:#1e2126;--tx:#e7e9ec;--mut:#9aa1ab;--ac:#6ea0ff;--bd:#2d3239}}
+:root[data-theme="dark"]{--bg:#15171a;--card:#1e2126;--tx:#e7e9ec;--mut:#9aa1ab;--ac:#6ea0ff;--bd:#2d3239}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:760px;margin:0 auto;padding:16px 14px 32px}
+h1{font-size:1.7rem;margin:0}
+.head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px;margin-bottom:12px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+select,button,input[type=text]{font:inherit;font-size:1.55rem;font-weight:600;color:var(--tx);background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px 20px}
+.row{gap:10px}
+#voice{flex:1 1 100%}
+select{flex:1;min-width:0}
+button{cursor:pointer}
+.ic{width:58px;height:58px;padding:0;border-radius:50%;font-size:1.6rem}
+#mic{width:100%;margin:12px 0;padding:22px;font-size:1.7rem;font-weight:600;background:var(--ac);color:#fff;border:0}
+#mic.on{background:var(--rec);animation:p 1.2s infinite}
+@keyframes p{50%{opacity:.75}}
+textarea{width:100%;min-height:230px;resize:vertical;font:inherit;font-size:1.1rem;line-height:1.6;color:var(--tx);background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px}
+#interim{min-height:1.4em;color:var(--mut);font-style:italic;margin:6px 2px}
+#msg{color:var(--mut);font-size:1.3rem;margin:4px 2px;min-height:1.2em}
+#msg.err{color:var(--rec)}
+.opts label{font-size:1.45rem;display:flex;align-items:center;gap:12px;margin-right:10px;margin-bottom:10px;width:100%}
+.opts input[type=checkbox]{width:30px;height:30px}
+.stats{color:var(--mut);font-size:1.15rem;margin:2px 2px 8px}
+details{border-top:1px solid var(--bd);padding:8px 0}
+summary{cursor:pointer;font-weight:600;font-size:1.55rem;padding:10px 0}
+.help{font-size:1.3rem;line-height:1.8;color:var(--mut)}
+.help b{color:var(--tx)}
+li.h{display:flex;gap:6px;align-items:center;margin:6px 0;list-style:none}
+li.h span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ul{padding:0;margin:6px 0}
+</style>
+</head>
+<body>
+<main>
+<div class="head">
+  <h1>Dictée vocale</h1>
+  <div class="row">
+    <button id="theme" class="ic" title="Thème" aria-label="Thème">🌓</button>
+    <button id="share" class="ic" title="Copier le lien de l'application" aria-label="Copier le lien"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg></button>
+  </div>
+</div>
 
+<div class="card">
+  <select id="lang" aria-label="Langue">
+    <option value="fr-FR">Français</option>
+    <option value="ar-MA">العربية (المغرب)</option>
+    <option value="ar-SA">العربية (فصحى)</option>
+    <option value="en-US">English (US)</option>
+    <option value="en-GB">English (UK)</option>
+  </select>
+  <div class="row" style="margin-top:10px"><select id="voice" aria-label="Voix de lecture"></select><label style="font-size:1.4rem;display:flex;align-items:center;gap:8px">Vitesse <input type="range" id="rate" min="0.6" max="1.4" step="0.05" style="width:110px"></label></div>
+  <div class="row opts" style="margin-top:10px">
+    <label><input type="checkbox" id="o-cmds"> Commandes vocales</label>
+    <label><input type="checkbox" id="o-punct"> Ponctuation vocale</label>
+    <label><input type="checkbox" id="o-caps"> Majuscules auto</label>
+    <label><input type="checkbox" id="o-auto"> Copier à l'arrêt</label>
+    <label><input type="checkbox" id="o-rec"> MP3 de la lecture (via le micro)</label>
+  </div>
+  <button id="mic">🎤 Démarrer la dictée</button>
+  <textarea id="txt" dir="auto" placeholder="Le texte dicté apparaîtra ici…"></textarea>
+  <div id="interim" dir="auto"></div>
+  <div id="msg"></div>
+  <div class="stats" id="stats"></div>
+  <div class="row">
+    <button id="bUndo">↶ Annuler</button>
+    <button id="bRedo">↷ Rétablir</button>
+    <button id="bCopy">Copier</button>
+    <button id="bDl">.txt</button>
+    <button id="bShare">Partager</button>
+    <button id="bRead">🔊 Lire</button>
+    <button id="bMp3G">🎙️ MP3 (voix Google)</button>
+    <button id="bMp3">🎧 MP3 (voix intégrée)</button>
+    <button id="bSave">💾 Enregistrer</button>
+    <button id="bMin">A−</button>
+    <button id="bMax">A+</button>
+    <button id="bClr">Effacer</button>
+  </div>
+</div>
+
+<div class="card">
+  <details>
+    <summary>Rechercher / remplacer</summary>
+    <div class="row" style="margin-top:8px">
+      <input type="text" id="fi" placeholder="Rechercher" dir="auto" style="flex:1;min-width:120px">
+      <input type="text" id="ri" placeholder="Remplacer par" dir="auto" style="flex:1;min-width:120px">
+      <button id="bRep">Tout remplacer</button>
+    </div>
+  </details>
+  <details>
+    <summary>Textes enregistrés</summary>
+    <ul id="hist"></ul>
+  </details>
+  <details>
+    <summary>Commandes vocales</summary>
+    <div class="help">
+      <p><b>Ponctuation :</b> point · virgule · point d'interrogation · point d'exclamation · point-virgule · deux points · points de suspension · ouvrez / fermez la parenthèse · ouvrez / fermez les guillemets · tiret · apostrophe · arobase · slash · pour cent · à la ligne · nouveau paragraphe</p>
+      <p><b>Actions</b> (à dire seules) : efface tout · efface le dernier mot · efface la dernière phrase · annule · rétablis · copie le texte · télécharge le texte · partage le texte · lis le texte · arrête la lecture · enregistre le texte · nouveau document · insère la date · insère l'heure · passe en arabe · passe en français · passe en anglais · crée le mp3 · arrête la dictée</p>
+      <p><b>English:</b> comma · period · question mark · exclamation mark · colon · semicolon · open / close parenthesis · open / close quote · new line · new paragraph · hyphen · <i>(actions)</i> clear all · undo · redo · delete last word · delete last sentence · copy the text · download the text · share the text · read the text · stop reading · save the text · new document · insert date · insert time · switch to french · switch to arabic · stop dictation</p>
+      <p dir="rtl"><b>بالعربية:</b> نقطة · فاصلة · علامة استفهام · علامة تعجب · نقطتان · فاصلة منقوطة · سطر جديد · فقرة جديدة · افتح قوس · أغلق قوس · افتح اقتباس · أغلق اقتباس<br>
+      <b>أوامر:</b> امسح كل شيء · امسح الكلمة الأخيرة · امسح الجملة الأخيرة · تراجع · أعد · انسخ النص · حمّل النص · شارك النص · اقرأ النص · أوقف القراءة · احفظ النص · نص جديد · ادرج التاريخ · ادرج الوقت · حوّل إلى الفرنسية · أوقف الإملاء</p>
+    </div>
+  </details>
+</div>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const txt=$('txt'),mic=$('mic'),itm=$('interim'),msg=$('msg'),lang=$('lang');
+const store={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(_){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(_){}}};
+const opts=Object.assign({lang:'fr-FR',punct:true,caps:true,cmds:true,auto:false,rec:false,voices:{},rate:1,size:1.1,theme:'auto'},store.get('opts',{}));
+const sv=()=>store.set('opts',opts);
+let rec=null,listening=false,undo=[''],redo=[],timer=null,wake=null;
+
+function info(t,err){msg.textContent=t||'';msg.className=err?'err':''}
+/* message avec boutons : sert quand Android exige un appui (partage, copie, téléchargement) */
+function actionMsg(t,btns){
+  msg.className='';msg.textContent=t+' ';
+  btns.forEach(([l,f])=>{const b=document.createElement('button');b.textContent=l;b.style.cssText='margin:2px 4px 2px 0;padding:6px 10px;background:var(--ac);color:#fff;border:0';b.onclick=()=>{f()};msg.append(b)});
+}
+const active=()=>navigator.userActivation?navigator.userActivation.isActive:true;
+const TWA=(document.referrer||'').startsWith('android-app://')||matchMedia('(display-mode: standalone)').matches;
+/* remet un fichier à l'utilisateur : téléchargement, ou feuille de partage Android (fiable dans l'appli) */
+function deliver(blob,name){
+  const url=URL.createObjectURL(blob),file=new File([blob],name,{type:blob.type});
+  const canShare=!!(navigator.canShare&&navigator.canShare({files:[file]}));
+  const dl=()=>{const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();info('Téléchargement lancé : '+name)};
+  const sh=async()=>{try{await navigator.share({files:[file],title:name});info('Fichier partagé ✓')}catch(e){if(e.name!=='AbortError')info('Partage impossible ('+e.name+') : essayez « Télécharger »',1)}};
+  if(!TWA&&active()){dl();return}
+  const b=[];if(canShare)b.push(['📤 Enregistrer / Partager',sh]);b.push(['⬇ Télécharger',dl]);
+  actionMsg('Fichier prêt ('+name+') :',b);
+}
+function stats(){const v=txt.value;$('stats').textContent=((v.trim().match(/\S+/g)||[]).length)+' mots · '+v.length+' caractères'}
+function set(v){const cur=txt.value;if(undo[undo.length-1]!==cur){undo.push(cur)}txt.value=v;if(undo[undo.length-1]!==v){undo.push(v);if(undo.length>100)undo.shift()}redo=[];stats();txt.scrollTop=txt.scrollHeight}
+txt.addEventListener('input',()=>{stats();clearTimeout(timer);timer=setTimeout(()=>{if(undo[undo.length-1]!==txt.value){undo.push(txt.value);redo=[]}},700)});
+function doUndo(){if(undo.length>1){redo.push(undo.pop());txt.value=undo[undo.length-1];stats()}else info('Rien à annuler')}
+function doRedo(){if(redo.length){const v=redo.pop();undo.push(v);txt.value=v;stats()}else info('Rien à rétablir')}
+
+/* normalisation pour comparer les commandes */
+const norm=s=>s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f\u064b-\u065f\u0670]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/[^\p{L}\p{N}\s]/gu,' ').replace(/\s+/g,' ').trim();
+const C={
+clear:['clear all','delete all','erase all','efface tout','effacer tout','tout effacer','supprime tout','tout supprimer','امسح كل شيء','امسح الكل'],
+undoC:['undo','undo that','annule','annuler','annule ça','revenir en arrière','تراجع','annulé','annule la dernière action'],
+redoC:['redo','rétablis','rétablir','refaire','أعد','اعد','rétablit','rétablie','refais'],
+w:['delete last word','delete the last word','efface le dernier mot','supprime le dernier mot','supprimer le dernier mot','امسح الكلمة الأخيرة','effacer le dernier mot','efface dernier mot','supprime dernier mot'],
+s:['delete last sentence','delete the last sentence','efface la dernière phrase','supprime la dernière phrase','supprimer la dernière phrase','امسح الجملة الأخيرة','effacer la dernière phrase','efface dernière phrase'],
+copy:['copy text','copy the text','copie le texte','copier le texte','copie tout','انسخ النص','copier texte','copie texte'],
+dl:['download text','download the text','télécharge le texte','télécharger le texte','حمل النص','تحميل النص','télécharge texte','télécharger texte'],
+read:['read text','read the text','read it back','lis le texte','relis le texte','lire le texte','اقرأ النص','lis moi le texte','relire le texte'],
+mute:['stop reading','arrête la lecture','stop lecture','أوقف القراءة','توقف عن القراءة','arrêter la lecture','stop la lecture'],
+stop:['stop dictation','stop listening','arrête la dictée','arrête dictée','stop dictée','fin de la dictée','pause','أوقف الإملاء','توقف','arrêter la dictée','arrête','arrêter','stop'],
+save:['save text','save the text','enregistre le texte','sauvegarde le texte','enregistrer','احفظ النص','sauvegarder le texte','enregistre texte'],
+neu:['new document','new text','nouveau document','nouveau texte','نص جديد','مستند جديد'],
+share:['share text','share the text','partage le texte','partager le texte','شارك النص'],
+fr:['switch to french','in french','passe en français','passe en français','en français','mode français','حول إلى الفرنسية','بالفرنسية','passer en français'],
+ar:['switch to arabic','in arabic','passe en arabe','en arabe','mode arabe','حول إلى العربية','بالعربية','passer en arabe'],
+date:['insert date','insert the date','insère la date','insère date','ادرج التاريخ','insérer la date','insère la date du jour','insérer date'],
+mp3:['crée le mp3','créer le mp3','crée un mp3','export mp3','exporte en mp3','create mp3','create the mp3','crée le mp 3','crée un mp 3','crée le mp trois','créer le mp 3','export mp 3'],
+en:['switch to english','in english','english mode','passe en anglais','en anglais','mode anglais','حول إلى الإنجليزية','بالإنجليزية','passer en anglais'],
+time:['insert time','insert the time',"insère l'heure",'insère heure','ادرج الوقت',"insérer l'heure",'insérer heure']
+};
+const M={};for(const[k,a]of Object.entries(C))a.forEach(p=>M[norm(p)]=k);
+function lev(a,b){const m=a.length,n=b.length;let d=Array.from({length:n+1},(_,j)=>j);for(let i=1;i<=m;i++){let prev=d[0];d[0]=i;for(let j=1;j<=n;j++){const t=d[j];d[j]=Math.min(d[j]+1,d[j-1]+1,prev+(a[i-1]===b[j-1]?0:1));prev=t}}return d[n]}
+/* tolère « s'il te plaît », variantes de reconnaissance (annulé, mp 3…) et 1-2 lettres d'écart */
+function findCmd(t){
+  const n=norm(t).replace(/ (s il (te|vous) plait|svp|please)$/,'').replace(/^(please|svp) /,'');
+  if(M[n])return M[n];
+  if(n.length<7||n.split(' ').length>7)return null;
+  let best=null,bd=9;
+  for(const p in M){const lim=p.length>=12?2:p.length>=7?1:0;if(!lim||Math.abs(p.length-n.length)>lim)continue;const d=lev(n,p);if(d<=lim&&d<bd){bd=d;best=M[p]}}
+  return best;
+}
+
+/* ponctuation vocale */
+const L='(?<![\\p{L}])',R='(?![\\p{L}])';
+const P=[
+['fr',String.raw`point[\s-]+d['’\s]?interrogation`,'?'],
+['fr',String.raw`point[\s-]+d['’\s]?exclamation`,'!'],
+['fr',String.raw`points?[\s-]+de[\s-]+suspension`,'…'],
+['fr',String.raw`point[\s-]+virgule`,';'],
+['fr',String.raw`deux[\s-]+points`,':'],
+['fr',String.raw`ouvr(?:e|ez|ir)[\s-]+(?:la[\s-]+)?parenth[eè]se`,'('],
+['fr',String.raw`ferm(?:e|ez|er)[\s-]+(?:la[\s-]+)?parenth[eè]se`,')'],
+['fr',String.raw`ouvr(?:e|ez|ir)[\s-]+(?:les[\s-]+)?guillemets?`,'«'],
+['fr',String.raw`ferm(?:e|ez|er)[\s-]+(?:les[\s-]+)?guillemets?`,'»'],
+['fr',String.raw`nouveau[\s-]+paragraphe|nouvel[\s-]+alin[ée]a`,'\n\n'],
+['fr',String.raw`(?:retour[\s-]+)?[àa][\s-]+la[\s-]+ligne|nouvelle[\s-]+ligne`,'\n'],
+['fr',String.raw`virgule`,','],['fr',String.raw`point`,'.'],['fr',String.raw`tiret`,'-'],
+['fr',String.raw`apostrophe`,"'"],['fr',String.raw`arobase`,'@'],['fr',String.raw`slash`,'/'],['fr',String.raw`pour[\s-]+cent`,'%'],
+['ar',String.raw`علام[ةه][\s-]+استفهام`,'؟'],
+['ar',String.raw`علام[ةه][\s-]+تعجب`,'!'],
+['ar',String.raw`فاصل[ةه][\s-]+منقوط[ةه]`,'؛'],
+['ar',String.raw`نقطتان`,':'],
+['ar',String.raw`افتح[\s-]+قوس`,'('],
+['ar',String.raw`[اأ]غلق[\s-]+قوس`,')'],
+['ar',String.raw`افتح[\s-]+(?:اقتباس|تنصيص)`,'«'],
+['ar',String.raw`[اأ]غلق[\s-]+(?:اقتباس|تنصيص)`,'»'],
+['ar',String.raw`فقر[ةه][\s-]+جديد[ةه]`,'\n\n'],
+['ar',String.raw`سطر[\s-]+جديد`,'\n'],
+['ar',String.raw`فاصل[ةه]`,'،'],['ar',String.raw`نقط[ةه]`,'.'],
+['en',String.raw`question[\s-]+mark`,'?'],
+['en',String.raw`exclamation[\s-]+(?:mark|point)`,'!'],
+['en',String.raw`semi[\s-]?colon`,';'],
+['en',String.raw`colon`,':'],
+['en',String.raw`ellipsis|dot[\s-]+dot[\s-]+dot`,'…'],
+['en',String.raw`open[\s-]+(?:parenthesis|bracket|paren)`,'('],
+['en',String.raw`close[\s-]+(?:parenthesis|bracket|paren)`,')'],
+['en',String.raw`open[\s-]+quotes?`,'“'],
+['en',String.raw`(?:close|end)[\s-]+quotes?`,'”'],
+['en',String.raw`new[\s-]+paragraph`,'\n\n'],
+['en',String.raw`new[\s-]+line`,'\n'],
+['en',String.raw`comma`,','],['en',String.raw`period|full[\s-]+stop`,'.'],
+['en',String.raw`hyphen|dash`,'-'],['en',String.raw`apostrophe`,"'"],
+['en',String.raw`at[\s-]+sign`,'@'],['en',String.raw`percent(?:[\s-]+sign)?`,'%'],['en',String.raw`slash`,'/']
+].map(([g,s,r])=>[g,new RegExp(L+'(?:'+s+')'+R,'giu'),r]);
+
+function ins(t){
+  if(!t)return;
+  t=t.replace(/\s+([,.;:!?…)»”؟،؛])/g,'$1').replace(/([(«“])\s+/g,'$1').replace(/[ \t]*\n[ \t]*/g,'\n').trim()||t;
+  let v=txt.value;
+  if(opts.caps){
+    t=t.replace(/([.!?…؟]\s+|\n)(\p{Ll})/gu,(m,a,b)=>a+b.toUpperCase());
+    if(!v.trim()||/[.!?…؟]\s*$|\n\s*$/.test(v))t=t.replace(/^(\p{Ll})/u,m=>m.toUpperCase());
+  }
+  const sep=(!v||/[\s(«“]$/.test(v)||/^[\s,.;:!?…)»”؟،؛]/.test(t))?'':' ';
+  set(v+sep+t);
+}
+function onFinal(t){
+  t=t.trim();if(!t)return;
+  if(opts.cmds){const k=findCmd(t);if(k&&A[k]){info('🎙️ Commande : « '+t+' »');A[k]();return}}
+  if(opts.punct)P.forEach(([g,r,x])=>{if(g==='ar'||lang.value.startsWith(g))t=t.replace(r,x)});
+  ins(t);
+}
+
+/* actions */
+async function doCopy(){
+  try{await navigator.clipboard.writeText(txt.value);info('Texte copié ✓');return true}catch(_){}
+  try{txt.select();if(document.execCommand('copy')){info('Texte copié ✓');return true}}catch(_){}
+  actionMsg('Android bloque la copie automatique :',[['Copier le texte',doCopy]]);return false;
+}
+function doDl(){if(!txt.value.trim()){info('Aucun texte à télécharger');return}deliver(new Blob(["\ufeff"+txt.value],{type:'text/plain;charset=utf-8'}),'dictee.txt')}
+async function doShare(){
+  if(!navigator.share){doCopy();return}
+  try{await navigator.share({text:txt.value})}
+  catch(e){if(e.name!=='AbortError')actionMsg('Le partage demande un appui :',[['📤 Partager le texte',doShare]])}
+}
+/* synthèse vocale intégrée (modèles MMS exécutés dans le navigateur) → MP3 */
+const tick=()=>new Promise(r=>setTimeout(r,0));
+const _fetch=window.fetch.bind(window);
+window.fetch=async(...x)=>{try{return await _fetch(...x)}catch(e){const u=typeof x[0]==='string'?x[0]:(x[0]&&x[0].url)||'';e.message+=' → '+u.replace(/^https?:\/\//,'').slice(0,70);throw e}};
+const TTSM={ar:'Xenova/mms-tts-ara',fr:'Xenova/mms-tts-fra',en:'Xenova/mms-tts-eng'},ttsP={};let tfm=null,busy=false;
+async function getTts(k){
+  if(ttsP[k])return ttsP[k];
+  for(const o of Object.keys(ttsP)){try{await ttsP[o].dispose()}catch(_){}delete ttsP[o]}
+  if(!tfm){tfm=await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');tfm.env.allowLocalModels=false;tfm.env.backends.onnx.wasm.proxy=true;tfm.env.backends.onnx.wasm.numThreads=1}
+  return ttsP[k]=await tfm.pipeline('text-to-speech',TTSM[k],{progress_callback:p=>{if(p.status==='progress')info('Téléchargement de la voix '+k.toUpperCase()+' : '+Math.round(p.progress)+' %')}});
+}
+async function makeMp3(){
+  if(busy){info('Conversion déjà en cours…');return}
+  const text=txt.value.trim();
+  if(!text){info('Aucun texte à convertir',1);return}
+  if(typeof lamejs==='undefined'){info("Convertisseur MP3 non chargé : vérifiez la connexion internet",1);return}
+  if(text.length>3000){info('Texte trop long pour le téléphone : créez le MP3 par parties de 3000 caractères maximum',1);return}
+  try{speechSynthesis.cancel()}catch(_){}
+  readId++;
+  if(mrec&&mrec.state!=='inactive'){mrec.skip=true;try{mrec.stop()}catch(_){}}
+  busy=true;
+  try{
+    const en=lang.value.startsWith('en');
+    const parts=text.split(/(?<=[.!?…؟\n])\s+/).map(x=>x.trim()).filter(Boolean).flatMap(x=>x.match(/[\u0600-\u06FF]/.test(x)?/.{1,140}(?:\s|$)/gu:/.{1,250}(?:\s|$)/gu)||[x]);
+    const bits=[];let sr=16000,len=0;
+    for(let i=0;i<parts.length;i++){
+      const k=/[\u0600-\u06FF]/.test(parts[i])?'ar':(en?'en':'fr');
+      info('Voix '+k.toUpperCase()+' : phrase '+(i+1)+' / '+parts.length+'…');
+      await tick();const t=await getTts(k),o=await t(k==='ar'?parts[i].replace(/[\u0640\u064B-\u065F\u0670]/g,'').trim():parts[i].trim());
+      sr=o.sampling_rate;bits.push(o.audio,new Float32Array(Math.round(sr*.25)));len+=o.audio.length+Math.round(sr*.25);
+    }
+    const all=new Float32Array(len);let off=0;bits.forEach(b=>{all.set(b,off);off+=b.length});
+    const pcm=new Int16Array(all.length);
+    for(let i=0;i<all.length;i++){const x=Math.max(-1,Math.min(1,all[i]));pcm[i]=x<0?x*32768:x*32767}
+    const enc=new lamejs.Mp3Encoder(1,sr,64),out=[];
+    for(let i=0;i<pcm.length;i+=1152){const b=enc.encodeBuffer(pcm.subarray(i,i+1152));if(b.length)out.push(b);if((i/1152)%80===0)await tick()}
+    const e=enc.flush();if(e.length)out.push(e);
+    deliver(new Blob(out,{type:'audio/mpeg'}),'texte-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.mp3');
+  }catch(e){info('Échec de la synthèse MP3 : '+e.message+' [page : '+location.hostname+']',1)}
+  busy=false;
+}
+let recOnce=false,readId=0,mrec=null,mstream=null;
+async function recStart(){
+  const want=opts.rec||recOnce;recOnce=false;
+  if(!want||!navigator.mediaDevices||!window.MediaRecorder)return;
+  if(listening)stop();
+  try{
+    if(mrec&&mrec.state!=='inactive')mrec.stop();
+    const ms=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+    const my=[];mstream=ms;const r=new MediaRecorder(ms);mrec=r;
+    mrec.ondataavailable=e=>{if(e.data.size)my.push(e.data)};
+    r.onstop=()=>toMp3(my,ms,r);
+    mrec.start();info('Enregistrement en cours : restez au calme jusqu\'à la fin de la lecture…');
+  }catch(e){mrec=null;info('Enregistrement impossible ('+(e.name||'erreur')+') sur '+location.hostname+(e.name==='NotAllowedError'?' : autorisez le micro pour ce site (cadenas > Autorisations).':e.name==='NotReadableError'?' : micro utilisé par une autre application.':''),1)}
+}
+function recStop(){const m=mrec;if(m&&m.state!=='inactive')setTimeout(()=>{try{m.stop()}catch(_){}},700)}
+async function toMp3(parts,ms,m){
+  ms.getTracks().forEach(t=>t.stop());
+  if(!parts.length||(m&&m.skip))return;
+  try{
+    info('Conversion en MP3…');
+    const buf=await new Blob(parts).arrayBuffer();
+    const ac=new(window.AudioContext||window.webkitAudioContext)();
+    const ab=await ac.decodeAudioData(buf);ac.close();
+    const ch=ab.getChannelData(0),sr=ab.sampleRate,pcm=new Int16Array(ch.length);
+    for(let i=0;i<ch.length;i++){const x=Math.max(-1,Math.min(1,ch[i]));pcm[i]=x<0?x*32768:x*32767}
+    const enc=new lamejs.Mp3Encoder(1,sr,96),out=[];
+    for(let i=0;i<pcm.length;i+=1152){const b=enc.encodeBuffer(pcm.subarray(i,i+1152));if(b.length)out.push(b);if((i/1152)%80===0)await tick()}
+    const e=enc.flush();if(e.length)out.push(e);
+    deliver(new Blob(out,{type:'audio/mpeg'}),'lecture-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.mp3');
+  }catch(e){info('Conversion MP3 impossible : '+e.message,1)}
+}
+let voices=[];
+function pick(g){const id=opts.voices&&opts.voices[g];return id&&voices.find(x=>(x.voiceURI||x.name)===id)}
+function fillVoices(){
+  const sel=$('voice'),g=lang.value.slice(0,2),cur=(opts.voices&&opts.voices[g])||'';
+  sel.innerHTML='';
+  const o0=document.createElement('option');o0.value='';o0.textContent='Voix automatique';sel.append(o0);
+  voices.filter(v=>v.lang.replace('_','-').toLowerCase().startsWith(g)).forEach(v=>{const o=document.createElement('option');o.value=v.voiceURI||v.name;o.textContent=v.name+' ('+v.lang+')';sel.append(o)});
+  sel.value=cur;if(sel.value!==cur)sel.value='';
+}
+function loadVoices(){try{voices=speechSynthesis.getVoices()}catch(_){}fillVoices()}
+if('speechSynthesis' in window){loadVoices();speechSynthesis.onvoiceschanged=loadVoices}
+async function doRead(){
+  if(!('speechSynthesis' in window)){info('Lecture vocale non disponible',1);return}
+  speechSynthesis.cancel();loadVoices();const id=++readId;
+  const parts=txt.value.split(/(?<=[.!?…؟\n])\s+/).map(x=>x.trim()).filter(Boolean);
+  if(!parts.length){info('Aucun texte à lire');return}
+  await recStart();
+  const arV=voices.find(v=>/^ar[-_]sa/i.test(v.lang))||voices.find(v=>/^ar/i.test(v.lang));
+  const en=lang.value.startsWith('en');
+  const enV=voices.find(v=>v.lang.replace('_','-').toLowerCase()===lang.value.toLowerCase())||voices.find(v=>/^en/i.test(v.lang));
+  const frV=voices.find(v=>/^fr[-_]fr/i.test(v.lang))||voices.find(v=>/^fr/i.test(v.lang));
+  let missing=false;
+  parts.forEach((p,i)=>{
+    const ar=/[\u0600-\u06FF]/.test(p),u=new SpeechSynthesisUtterance(p),v=pick(ar?'ar':(en?'en':'fr'))||(ar?arV:(en?enV:frV));
+    if(v){u.voice=v;u.lang=v.lang}else{u.lang=ar?'ar-SA':(en?lang.value:'fr-FR')}
+    u.rate=opts.rate||1;
+    u.onerror=e=>{if(['language-unavailable','synthesis-unavailable','voice-unavailable'].includes(e.error))info('Voix indisponible pour cette langue : installez-la dans Réglages > Synthèse vocale > moteur Google',1);if(i===parts.length-1&&id===readId)recStop()};
+    if(i===parts.length-1)u.onend=()=>{if(id===readId)recStop()};
+    speechSynthesis.speak(u);
+  });
+}
+function hist(){return store.get('hist',[])}
+function doSave(){
+  const v=txt.value.trim();if(!v){info('Rien à enregistrer');return}
+  const h=hist();h.unshift({t:v,d:Date.now()});store.set('hist',h.slice(0,50));renderHist();info('Texte enregistré ✓');
+}
+function renderHist(){
+  const ul=$('hist'),h=hist();ul.innerHTML='';
+  if(!h.length){ul.innerHTML='<li class="h"><span>Aucun texte enregistré</span></li>';return}
+  h.forEach((x,i)=>{
+    const li=document.createElement('li');li.className='h';
+    const s=document.createElement('span');s.dir='auto';s.textContent=new Date(x.d).toLocaleDateString('fr-FR')+' — '+x.t.slice(0,40);
+    const o=document.createElement('button');o.textContent='Ouvrir';o.onclick=()=>{set(x.t);info('Texte ouvert')};
+    const d=document.createElement('button');d.textContent='✕';d.onclick=()=>{const hh=hist();hh.splice(i,1);store.set('hist',hh);renderHist()};
+    li.append(s,o,d);ul.append(li);
+  });
+}
+function setLang(c){lang.value=c;opts.lang=c;sv();fillVoices();info('Langue changée');if(listening)restart()}
+const loc=()=>lang.value.startsWith('ar')?'ar-MA':lang.value.startsWith('en')?lang.value:'fr-FR';
+const A={
+clear:()=>{set('');info('Texte effacé (dites « annule » pour le récupérer)')},
+undoC:doUndo,redoC:doRedo,
+w:()=>set(txt.value.replace(/\s*\S+\s*$/,'')),
+s:()=>set(txt.value.replace(/[^.!?…؟\n]*[.!?…؟]?\s*$/,'')),
+copy:doCopy,dl:doDl,read:doRead,mute:()=>{try{speechSynthesis.cancel()}catch(_){}readId++;recStop()},
+stop:()=>stop(),save:doSave,neu:()=>{doSave();set('')},share:doShare,
+fr:()=>setLang('fr-FR'),ar:()=>setLang('ar-MA'),en:()=>setLang('en-US'),mp3:()=>makeMp3(),
+date:()=>ins(new Date().toLocaleDateString(loc())),
+time:()=>ins(new Date().toLocaleTimeString(loc(),{hour:'2-digit',minute:'2-digit'}))
+};
+
+/* reconnaissance vocale */
+function build(){
+  rec=new SR();rec.lang=lang.value;rec.continuous=true;rec.interimResults=true;
+  rec.onresult=e=>{
+    let interim='';
+    for(let i=e.resultIndex;i<e.results.length;i++){const r=e.results[i];if(r.isFinal)onFinal(r[0].transcript);else interim+=r[0].transcript}
+    itm.textContent=interim;
+  };
+  rec.onerror=e=>{
+    if(e.error==='not-allowed'||e.error==='service-not-allowed'){info("Accès au microphone refusé. Autorisez-le dans les réglages du site (cadenas > Autorisations).",1);stop()}
+    else if(e.error==='language-not-supported'){info('Langue non prise en charge par ce navigateur.',1);stop()}
+    else if(e.error!=='no-speech'&&e.error!=='aborted')info('Erreur : '+e.error,1);
+  };
+  rec.onend=()=>{itm.textContent='';if(listening){try{rec.start()}catch(_){}}};
+}
+async function lock(){try{if(navigator.wakeLock)wake=await navigator.wakeLock.request('screen')}catch(_){}}
+function start(){
+  info('');build();
+  try{rec.start();listening=true;mic.classList.add('on');mic.textContent='⏹ Arrêter la dictée';lock()}
+  catch(e){info('Impossible de démarrer : '+e.message,1)}
+}
+function stop(){
+  const was=listening;listening=false;
+  mic.classList.remove('on');mic.textContent='🎤 Démarrer la dictée';
+  if(rec){try{rec.stop()}catch(_){}}
+  itm.textContent='';
+  try{if(wake)wake.release();wake=null}catch(_){}
+  if(was&&opts.auto&&txt.value)doCopy();
+}
+function restart(){if(rec){rec.onend=null;try{rec.abort()}catch(_){}}setTimeout(start,250)}
+if(!SR){mic.disabled=true;info("La reconnaissance vocale n'est pas disponible ici. Utilisez Google Chrome (Android ou ordinateur) ou Safari récent.",1)}
+mic.onclick=()=>listening?stop():start();
+lang.onchange=()=>{opts.lang=lang.value;sv();fillVoices();if(listening)restart()};
+$('voice').onchange=e=>{const g=lang.value.slice(0,2);opts.voices=opts.voices||{};opts.voices[g]=e.target.value;sv()};
+$('rate').value=opts.rate||1;$('rate').oninput=e=>{opts.rate=+e.target.value;sv()};
+
+/* boutons et réglages */
+$('bUndo').onclick=doUndo;$('bRedo').onclick=doRedo;$('bCopy').onclick=doCopy;$('bDl').onclick=doDl;
+$('bShare').onclick=doShare;$('bRead').onclick=doRead;$('bMp3').onclick=makeMp3;$('bMp3G').onclick=()=>{recOnce=true;doRead()};$('bSave').onclick=doSave;$('bClr').onclick=A.clear;
+function size(d){opts.size=Math.min(2,Math.max(.8,+(opts.size+d).toFixed(2)));txt.style.fontSize=opts.size+'rem';sv()}
+$('bMin').onclick=()=>size(-.1);$('bMax').onclick=()=>size(.1);
+$('bRep').onclick=()=>{
+  const f=$('fi').value;if(!f){info('Saisissez le texte à rechercher',1);return}
+  const re=new RegExp(f.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi');
+  const n=(txt.value.match(re)||[]).length;
+  if(n){set(txt.value.replace(re,()=>$('ri').value));info(n+' remplacement(s)')}else info('Aucune occurrence trouvée');
+};
+['punct','caps','cmds','auto','rec'].forEach(k=>{const c=$('o-'+k);c.checked=opts[k];c.onchange=()=>{opts[k]=c.checked;sv()}});
+function applyTheme(){
+  if(opts.theme==='auto')delete document.documentElement.dataset.theme;else document.documentElement.dataset.theme=opts.theme;
+  $('theme').textContent={auto:'🌓',dark:'🌙',light:'☀️'}[opts.theme];
+}
+$('theme').onclick=()=>{opts.theme={auto:'dark',dark:'light',light:'auto'}[opts.theme];applyTheme();sv()};
+$('share').onclick=async()=>{
+  try{await navigator.clipboard.writeText(location.href);info('Lien copié ✓')}
+  catch(_){if(navigator.share){try{await navigator.share({title:document.title,url:location.href})}catch(_){}}else prompt('Copiez le lien :',location.href)}
+};
+try{if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js')}catch(_){}
+lang.value=opts.lang;if(lang.value!==opts.lang)lang.value='fr-FR';
+txt.style.fontSize=opts.size+'rem';applyTheme();renderHist();stats();fillVoices();
+</script>
+</body>
+</html>

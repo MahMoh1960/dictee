@@ -1,0 +1,26 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "io.github.mahmoh1960.twa",
+      "sha256_cert_fingerprints": [
+        "7E:05:70:8E:EF:6D:DD:D4:31:33:BD:9C:36:CF:FB:CE:97:27:4E:D9:31:29:B3:DC:5C:9D:AD:43:CD:9E:33:3D"
+      ]
+    }
+  },
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "io.github.mahmoh1960.twa.grand",
+      "sha256_cert_fingerprints": [
+        "7E:05:70:8E:EF:6D:DD:D4:31:33:BD:9C:36:CF:FB:CE:97:27:4E:D9:31:29:B3:DC:5C:9D:AD:43:CD:9E:33:3D"
+      ]
+    }
+  }
+]
