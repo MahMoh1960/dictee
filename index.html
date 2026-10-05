@@ -124,8 +124,25 @@ const sv=()=>store.set('opts',opts);
 let rec=null,listening=false,undo=[''],redo=[],timer=null,wake=null;
 
 function info(t,err){msg.textContent=t||'';msg.className=err?'err':''}
+/* message avec boutons : sert quand Android exige un appui (partage, copie, téléchargement) */
+function actionMsg(t,btns){
+  msg.className='';msg.textContent=t+' ';
+  btns.forEach(([l,f])=>{const b=document.createElement('button');b.textContent=l;b.style.cssText='margin:2px 4px 2px 0;padding:6px 10px;background:var(--ac);color:#fff;border:0';b.onclick=()=>{f()};msg.append(b)});
+}
+const active=()=>navigator.userActivation?navigator.userActivation.isActive:true;
+const TWA=(document.referrer||'').startsWith('android-app://')||matchMedia('(display-mode: standalone)').matches;
+/* remet un fichier à l'utilisateur : téléchargement, ou feuille de partage Android (fiable dans l'appli) */
+function deliver(blob,name){
+  const url=URL.createObjectURL(blob),file=new File([blob],name,{type:blob.type});
+  const canShare=!!(navigator.canShare&&navigator.canShare({files:[file]}));
+  const dl=()=>{const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();info('Téléchargement lancé : '+name)};
+  const sh=async()=>{try{await navigator.share({files:[file],title:name});info('Fichier partagé ✓')}catch(e){if(e.name!=='AbortError')info('Partage impossible ('+e.name+') : essayez « Télécharger »',1)}};
+  if(!TWA&&active()){dl();return}
+  const b=[];if(canShare)b.push(['📤 Enregistrer / Partager',sh]);b.push(['⬇ Télécharger',dl]);
+  actionMsg('Fichier prêt ('+name+') :',b);
+}
 function stats(){const v=txt.value;$('stats').textContent=((v.trim().match(/\S+/g)||[]).length)+' mots · '+v.length+' caractères'}
-function set(v){txt.value=v;if(undo[undo.length-1]!==v){undo.push(v);if(undo.length>100)undo.shift()}redo=[];stats();txt.scrollTop=txt.scrollHeight}
+function set(v){const cur=txt.value;if(undo[undo.length-1]!==cur){undo.push(cur)}txt.value=v;if(undo[undo.length-1]!==v){undo.push(v);if(undo.length>100)undo.shift()}redo=[];stats();txt.scrollTop=txt.scrollHeight}
 txt.addEventListener('input',()=>{stats();clearTimeout(timer);timer=setTimeout(()=>{if(undo[undo.length-1]!==txt.value){undo.push(txt.value);redo=[]}},700)});
 function doUndo(){if(undo.length>1){redo.push(undo.pop());txt.value=undo[undo.length-1];stats()}else info('Rien à annuler')}
 function doRedo(){if(redo.length){const v=redo.pop();undo.push(v);txt.value=v;stats()}else info('Rien à rétablir')}
@@ -134,26 +151,36 @@ function doRedo(){if(redo.length){const v=redo.pop();undo.push(v);txt.value=v;st
 const norm=s=>s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f\u064b-\u065f\u0670]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/[^\p{L}\p{N}\s]/gu,' ').replace(/\s+/g,' ').trim();
 const C={
 clear:['clear all','delete all','erase all','efface tout','effacer tout','tout effacer','supprime tout','tout supprimer','امسح كل شيء','امسح الكل'],
-undoC:['undo','undo that','annule','annuler','annule ça','revenir en arrière','تراجع'],
-redoC:['redo','rétablis','rétablir','refaire','أعد','اعد'],
-w:['delete last word','delete the last word','efface le dernier mot','supprime le dernier mot','supprimer le dernier mot','امسح الكلمة الأخيرة'],
-s:['delete last sentence','delete the last sentence','efface la dernière phrase','supprime la dernière phrase','supprimer la dernière phrase','امسح الجملة الأخيرة'],
-copy:['copy text','copy the text','copie le texte','copier le texte','copie tout','انسخ النص'],
-dl:['download text','download the text','télécharge le texte','télécharger le texte','حمل النص','تحميل النص'],
-read:['read text','read the text','read it back','lis le texte','relis le texte','lire le texte','اقرأ النص'],
-mute:['stop reading','arrête la lecture','stop lecture','أوقف القراءة','توقف عن القراءة'],
-stop:['stop dictation','stop listening','arrête la dictée','arrête dictée','stop dictée','fin de la dictée','pause','أوقف الإملاء','توقف'],
-save:['save text','save the text','enregistre le texte','sauvegarde le texte','enregistrer','احفظ النص'],
+undoC:['undo','undo that','annule','annuler','annule ça','revenir en arrière','تراجع','annulé','annule la dernière action'],
+redoC:['redo','rétablis','rétablir','refaire','أعد','اعد','rétablit','rétablie','refais'],
+w:['delete last word','delete the last word','efface le dernier mot','supprime le dernier mot','supprimer le dernier mot','امسح الكلمة الأخيرة','effacer le dernier mot','efface dernier mot','supprime dernier mot'],
+s:['delete last sentence','delete the last sentence','efface la dernière phrase','supprime la dernière phrase','supprimer la dernière phrase','امسح الجملة الأخيرة','effacer la dernière phrase','efface dernière phrase'],
+copy:['copy text','copy the text','copie le texte','copier le texte','copie tout','انسخ النص','copier texte','copie texte'],
+dl:['download text','download the text','télécharge le texte','télécharger le texte','حمل النص','تحميل النص','télécharge texte','télécharger texte'],
+read:['read text','read the text','read it back','lis le texte','relis le texte','lire le texte','اقرأ النص','lis moi le texte','relire le texte'],
+mute:['stop reading','arrête la lecture','stop lecture','أوقف القراءة','توقف عن القراءة','arrêter la lecture','stop la lecture'],
+stop:['stop dictation','stop listening','arrête la dictée','arrête dictée','stop dictée','fin de la dictée','pause','أوقف الإملاء','توقف','arrêter la dictée','arrête','arrêter','stop'],
+save:['save text','save the text','enregistre le texte','sauvegarde le texte','enregistrer','احفظ النص','sauvegarder le texte','enregistre texte'],
 neu:['new document','new text','nouveau document','nouveau texte','نص جديد','مستند جديد'],
 share:['share text','share the text','partage le texte','partager le texte','شارك النص'],
-fr:['switch to french','in french','passe en français','passe en français','en français','mode français','حول إلى الفرنسية','بالفرنسية'],
-ar:['switch to arabic','in arabic','passe en arabe','en arabe','mode arabe','حول إلى العربية','بالعربية'],
-date:['insert date','insert the date','insère la date','insère date','ادرج التاريخ'],
-mp3:['crée le mp3','créer le mp3','crée un mp3','export mp3','exporte en mp3','create mp3','create the mp3'],
-en:['switch to english','in english','english mode','passe en anglais','en anglais','mode anglais','حول إلى الإنجليزية','بالإنجليزية'],
-time:['insert time','insert the time',"insère l'heure",'insère heure','ادرج الوقت']
+fr:['switch to french','in french','passe en français','passe en français','en français','mode français','حول إلى الفرنسية','بالفرنسية','passer en français'],
+ar:['switch to arabic','in arabic','passe en arabe','en arabe','mode arabe','حول إلى العربية','بالعربية','passer en arabe'],
+date:['insert date','insert the date','insère la date','insère date','ادرج التاريخ','insérer la date','insère la date du jour','insérer date'],
+mp3:['crée le mp3','créer le mp3','crée un mp3','export mp3','exporte en mp3','create mp3','create the mp3','crée le mp 3','crée un mp 3','crée le mp trois','créer le mp 3','export mp 3'],
+en:['switch to english','in english','english mode','passe en anglais','en anglais','mode anglais','حول إلى الإنجليزية','بالإنجليزية','passer en anglais'],
+time:['insert time','insert the time',"insère l'heure",'insère heure','ادرج الوقت',"insérer l'heure",'insérer heure']
 };
 const M={};for(const[k,a]of Object.entries(C))a.forEach(p=>M[norm(p)]=k);
+function lev(a,b){const m=a.length,n=b.length;let d=Array.from({length:n+1},(_,j)=>j);for(let i=1;i<=m;i++){let prev=d[0];d[0]=i;for(let j=1;j<=n;j++){const t=d[j];d[j]=Math.min(d[j]+1,d[j-1]+1,prev+(a[i-1]===b[j-1]?0:1));prev=t}}return d[n]}
+/* tolère « s'il te plaît », variantes de reconnaissance (annulé, mp 3…) et 1-2 lettres d'écart */
+function findCmd(t){
+  const n=norm(t).replace(/ (s il (te|vous) plait|svp|please)$/,'').replace(/^(please|svp) /,'');
+  if(M[n])return M[n];
+  if(n.length<7||n.split(' ').length>7)return null;
+  let best=null,bd=9;
+  for(const p in M){const lim=p.length>=12?2:p.length>=7?1:0;if(!lim||Math.abs(p.length-n.length)>lim)continue;const d=lev(n,p);if(d<=lim&&d<bd){bd=d;best=M[p]}}
+  return best;
+}
 
 /* ponctuation vocale */
 const L='(?<![\\p{L}])',R='(?![\\p{L}])';
@@ -211,15 +238,23 @@ function ins(t){
 }
 function onFinal(t){
   t=t.trim();if(!t)return;
-  if(opts.cmds){const k=M[norm(t)];if(k&&A[k]){A[k]();return}}
+  if(opts.cmds){const k=findCmd(t);if(k&&A[k]){info('🎙️ Commande : « '+t+' »');A[k]();return}}
   if(opts.punct)P.forEach(([g,r,x])=>{if(g==='ar'||lang.value.startsWith(g))t=t.replace(r,x)});
   ins(t);
 }
 
 /* actions */
-async function doCopy(){try{await navigator.clipboard.writeText(txt.value);info('Texte copié ✓')}catch(_){txt.select();document.execCommand('copy');info('Texte copié ✓')}}
-function doDl(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(["\ufeff"+txt.value],{type:'text/plain;charset=utf-8'}));a.download='dictee.txt';a.click()}
-async function doShare(){if(navigator.share){try{await navigator.share({text:txt.value})}catch(_){}}else doCopy()}
+async function doCopy(){
+  try{await navigator.clipboard.writeText(txt.value);info('Texte copié ✓');return true}catch(_){}
+  try{txt.select();if(document.execCommand('copy')){info('Texte copié ✓');return true}}catch(_){}
+  actionMsg('Android bloque la copie automatique :',[['Copier le texte',doCopy]]);return false;
+}
+function doDl(){if(!txt.value.trim()){info('Aucun texte à télécharger');return}deliver(new Blob(["\ufeff"+txt.value],{type:'text/plain;charset=utf-8'}),'dictee.txt')}
+async function doShare(){
+  if(!navigator.share){doCopy();return}
+  try{await navigator.share({text:txt.value})}
+  catch(e){if(e.name!=='AbortError')actionMsg('Le partage demande un appui :',[['📤 Partager le texte',doShare]])}
+}
 /* synthèse vocale intégrée (modèles MMS exécutés dans le navigateur) → MP3 */
 const tick=()=>new Promise(r=>setTimeout(r,0));
 const _fetch=window.fetch.bind(window);
@@ -257,9 +292,7 @@ async function makeMp3(){
     const enc=new lamejs.Mp3Encoder(1,sr,64),out=[];
     for(let i=0;i<pcm.length;i+=1152){const b=enc.encodeBuffer(pcm.subarray(i,i+1152));if(b.length)out.push(b);if((i/1152)%80===0)await tick()}
     const e=enc.flush();if(e.length)out.push(e);
-    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(out,{type:'audio/mpeg'}));
-    a.download='texte-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.mp3';a.click();
-    info('Fichier MP3 créé ✓');
+    deliver(new Blob(out,{type:'audio/mpeg'}),'texte-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.mp3');
   }catch(e){info('Échec de la synthèse MP3 : '+e.message+' [page : '+location.hostname+']',1)}
   busy=false;
 }
@@ -291,9 +324,7 @@ async function toMp3(parts,ms,m){
     const enc=new lamejs.Mp3Encoder(1,sr,96),out=[];
     for(let i=0;i<pcm.length;i+=1152){const b=enc.encodeBuffer(pcm.subarray(i,i+1152));if(b.length)out.push(b);if((i/1152)%80===0)await tick()}
     const e=enc.flush();if(e.length)out.push(e);
-    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(out,{type:'audio/mpeg'}));
-    a.download='lecture-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.mp3';a.click();
-    info('Fichier MP3 enregistré ✓');
+    deliver(new Blob(out,{type:'audio/mpeg'}),'lecture-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.mp3');
   }catch(e){info('Conversion MP3 impossible : '+e.message,1)}
 }
 let voices=[];
